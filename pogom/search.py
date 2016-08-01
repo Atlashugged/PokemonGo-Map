@@ -16,6 +16,7 @@ import logging
 import time
 import math
 import threading
+import random
 
 from threading import Thread, Lock
 from queue import Queue
@@ -63,11 +64,14 @@ def get_new_coords(init_loc, distance, bearing):
 
     new_lat = math.asin( math.sin(init_coords[0])*math.cos(distance/R) +
         math.cos(init_coords[0])*math.sin(distance/R)*math.cos(bearing))
-
     new_lon = init_coords[1] + math.atan2(math.sin(bearing)*math.sin(distance/R)*math.cos(init_coords[0]),
         math.cos(distance/R)-math.sin(init_coords[0])*math.sin(new_lat))
-
-    return [math.degrees(new_lat), math.degrees(new_lon)]
+    
+    wobble_lat = new_lat + (random.uniform(0.00000001,0.0000015) * random.choice([-1,1]))
+    wobble_lon = new_lon + (random.uniform(0.00000001,0.0000015) * random.choice([-1,1]))
+    print "lat: {}, lon: {}".format(new_lat, new_lon)
+    print "wob: {}, wlb: {}".format(wobble_lat, wobble_lon)
+    return [math.degrees(wobble_lat), math.degrees(wobble_lon)]
 
 def generate_location_steps(initial_loc, step_count):
     #Bearing (degrees)
@@ -171,9 +175,11 @@ def search_thread(q):
             else:
                 log.info('Map download failed, waiting and retrying')
                 log.debug('{}: itteration {} step {} failed'.format(threadname, i, step))
-                time.sleep(config['REQ_SLEEP'])
+                print "sleeping {}".format(config['REQ_SLEEP']+random.randint(1,3)+random.random())
+                time.sleep(config['REQ_SLEEP']+random.randint(1,3)+random.random())
 
-        time.sleep(config['REQ_SLEEP'])
+        print "sleeping {}".format(config['REQ_SLEEP']+random.randint(1,3)+random.random())
+        time.sleep(config['REQ_SLEEP']+random.randint(1,3)+random.random())
         q.task_done()
 
 

@@ -91,7 +91,6 @@ class PGoApi:
         # cleanup after call execution
         self.log.info('Cleanup of request!')
         self._req_method_list = []
-        
         return response
     
     #def get_player(self):
