@@ -17,6 +17,7 @@ import time
 import math
 import threading
 import random
+import maps
 
 from threading import Thread, Lock
 from queue import Queue
@@ -75,6 +76,7 @@ def get_new_coords(init_loc, distance, bearing):
 
 def generate_location_steps(initial_loc, step_count):
     #Bearing (degrees)
+    '''
     NORTH = 0
     EAST = 90
     SOUTH = 180
@@ -112,6 +114,24 @@ def generate_location_steps(initial_loc, step_count):
                     loc = get_new_coords(loc, xdist/2, EAST)
                 yield (loc[0], loc[1], 0)
         ring += 1
+    '''
+    loopdest = maps.coordinates("Pioneer Square, Seattle, wa")
+    waydest = maps.coordinates("Belltown, Seattle, wa")
+    yield (initial_loc[0], initial_loc[1], 0)
+    mpath = maps.path((initial_loc[0], initial_loc[1]), loopdest)
+    for s in mpath:
+        print (s[0],s[1],0)
+        yield (s[0],s[1],0)
+    
+    mpath = maps.path(loopdest, waydest)
+    for s in mpath:
+        print (s[0],s[1],0)
+        yield (s[0],s[1],0)
+        
+    mpath = maps.path(waydest, (initial_loc[0], initial_loc[1]))
+    for s in mpath:
+        print (s[0],s[1],0)
+        yield (s[0],s[1],0)
 
 
 def login(args, position):
@@ -175,11 +195,11 @@ def search_thread(q):
             else:
                 log.info('Map download failed, waiting and retrying')
                 log.debug('{}: itteration {} step {} failed'.format(threadname, i, step))
-                print "sleeping {}".format(config['REQ_SLEEP']+random.randint(1,3)+random.random())
-                time.sleep(config['REQ_SLEEP']+random.randint(1,3)+random.random())
+                print "sleeping {}".format(config['REQ_SLEEP'])
+                time.sleep(config['REQ_SLEEP'])
 
-        print "sleeping {}".format(config['REQ_SLEEP']+random.randint(1,3)+random.random())
-        time.sleep(config['REQ_SLEEP']+random.randint(1,3)+random.random())
+        print "sleeping {}".format(config['REQ_SLEEP'])
+        time.sleep(config['REQ_SLEEP'])
         q.task_done()
 
 
@@ -231,6 +251,7 @@ def search(args, i):
     lock = Lock()
 
     for step, step_location in enumerate(generate_location_steps(position, num_steps), 1):
+        log.info("Path test {}".format(step_location))
         log.debug("Queue search itteration {}, step {}".format(i, step))
         search_args = (i, step_location, step, lock)
         search_queue.put(search_args)
