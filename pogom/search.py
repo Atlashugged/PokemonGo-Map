@@ -19,6 +19,8 @@ import threading
 import random
 import maps
 import json
+from .models import Route, Minion
+import pickle
 
 
 from threading import Thread, Lock
@@ -56,52 +58,24 @@ def send_map_request(api, position):
         log.warning("Uncaught exception when downloading map " + str(e))
         return False
 
-def get_new_coords(init_loc, distance, bearing):
-    """ Given an initial lat/lng, a distance(in kms), and a bearing (degrees),
-    this will calculate the resulting lat/lng coordinates.
-    """ 
-    R = 6378.1 #km radius of the earth
-    bearing = math.radians(bearing)
-
-    init_coords = [math.radians(init_loc[0]), math.radians(init_loc[1])] # convert lat/lng to radians
-
-    new_lat = math.asin( math.sin(init_coords[0])*math.cos(distance/R) +
-        math.cos(init_coords[0])*math.sin(distance/R)*math.cos(bearing))
-    new_lon = init_coords[1] + math.atan2(math.sin(bearing)*math.sin(distance/R)*math.cos(init_coords[0]),
-        math.cos(distance/R)-math.sin(init_coords[0])*math.sin(new_lat))
-    
-    wobble_lat = new_lat + (random.uniform(0.00000001,0.0000015) * random.choice([-1,1]))
-    wobble_lon = new_lon + (random.uniform(0.00000001,0.0000015) * random.choice([-1,1]))
-    print "lat: {}, lon: {}".format(new_lat, new_lon)
-    print "wob: {}, wlb: {}".format(wobble_lat, wobble_lon)
-    return [math.degrees(wobble_lat), math.degrees(wobble_lon)]
-
 def generate_location_steps(route):
     time.sleep(1)
-    homedest = maps.coordinates(route[0])
-    waydest = maps.coordinates(route[1])
-    loopdest = maps.coordinates(route[2])
+    loc = maps.getElevation(maps.coordinates(route[0]))
+    for i in range(len(route)):
+        speed=11+random.choice([-3,-2,-1,0,1])
+        if (i==0):
+            #yield loc
+            continue
+        for s in maps.path(maps.coordinates('{},{}'.format(loc[0],loc[1])),maps.coordinates(route[i]),speed=speed):
+            loc = randomizeCoords((s[0],s[1],s[2]))
+            yield (loc)
     
-    yield maps.getElevation(homedest)
-    speed=11+random.choice([-3,-2,-1,0,1,2])
-    mpath = maps.path(homedest, waydest, speed=speed)
-    for s in mpath:
-        yield (randomizeCoords((s[0],s[1],s[2])))
-    
-    mpath = maps.path(waydest, loopdest, speed=speed)
-    for s in mpath:
-        yield (randomizeCoords((s[0],s[1],s[2])))
-        
-    mpath = maps.path(loopdest, homedest, speed=speed)
-    for s in mpath:
-        yield (randomizeCoords((s[0],s[1],s[2])))
-
 def randomizeCoords(coords):
     lat = coords[0]
     lon = coords[1]
     z = coords[2]
-    lat = lat + (random.uniform(0.00000001,0.0000013) * random.choice([-1,1]))
-    lon = lon + (random.uniform(0.00000001,0.0000013) * random.choice([-1,1]))
+    lat = lat + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
+    lon = lon + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
     return(lat,lon,z)
     
 def login(api, args, position, i=0):
@@ -135,31 +109,31 @@ def search_thread(userid,args,q):
     threadname = threading.currentThread().getName()
     log.debug("Search thread {}: started and waiting".format(threadname))
     while True:
-
         # Get the next item off the queue (this blocks till there is something)
-        route, lock = q.get()
+        m, r, lock = q.get()
         i=0
-        for loc in route:
+        for location in route:
             i=i+1
-            if api._auth_provider and api._auth_provider._ticket_expire:
-                remaining_time = api._auth_provider._ticket_expire/1000 - time.time()
-        
-                if remaining_time > 60:
-                    log.info("Skipping Pokemon Go login process since already logged in \
-                        for another {:.2f} seconds".format(remaining_time))
+            with lock:
+                if api._auth_provider and api._auth_provider._ticket_expire:
+                    remaining_time = api._auth_provider._ticket_expire/1000 - time.time()
+            
+                    if remaining_time > 60:
+                        log.info("Skipping Pokemon Go login process since already logged in \
+                            for another {:.2f} seconds".format(remaining_time))
+                    else:
+                        login(api, args, location[1], userid)
                 else:
-                    login(api, args, loc[1], userid)
-            else:
-                login(api, args, loc[1], userid)
+                    login(api, args, location[1], userid)
             response_dict = {}
             failed_consecutive = 0
             while not response_dict:
-                response_dict = send_map_request(api, loc[1])
-                print '{}: location: {}'.format(args.pgousers[userid][0], loc[1])
+                response_dict = send_map_request(api, location[1])
+                print '{}: location: {}'.format(args.pgousers[userid][0], location[1])
                 if response_dict:
                     with lock:
                         try:
-                            parse_map(response_dict, i, step, loc[1])
+                            parse_map(response_dict, i, step, location[1])
                             log.debug("{}: itteration {} step {} complete".format(threadname, i, step))
                         except KeyError:
                             log.error('Search thread failed. Response dictionary key error')
@@ -206,13 +180,13 @@ def search_loop(args):
 #
 def search(args):
 
-    position = (config['ORIGINAL_LATITUDE'], config['ORIGINAL_LONGITUDE'], 0)
-
-    lock = Lock()
+    lock = threading.RLock()
     with lock:
-        for r in args.routes:
-            waypoints = enumerate(generate_location_steps(r))
-            search_args = (waypoints, lock)
+        m = Minion.freeMinion()
+        r = Route.getAllRoutes()
+        for r in routes:
+            #waypoints = enumerate(generate_location_steps(pickle.loads(r['route_data'])))
+            search_args = (m, r, lock)
             search_queue.put(search_args)
 
     # Wait until this scan itteration queue is empty (not nessearily done)

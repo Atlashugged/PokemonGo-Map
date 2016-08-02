@@ -112,9 +112,78 @@ def get_args():
             sys.exit(1)
     return args
 
-
+def insert_mock_routes():
+    from .models import Route
+    import pickle
+    mockRoutes = {
+                  "routes": [
+                    {
+                      "route_id": 1,
+                      "route_type": 0,
+                      "route_data": [
+                        "Pioneer Square, Seattle, wa",
+                        "Olympic Sculpture Park, Seattle, wa",
+                        "The 5th Avenue Theatre, Seattle, WA"
+                      ]
+                    },
+                    {
+                      "route_id": 2,
+                      "route_type": 0,
+                      "route_data": [
+                        "47.656541,-122.3573115",
+                        "47.665176, -122.354277",
+                        "47.653479, -122.349998"
+                      ]
+                    },
+                    {
+                      "route_id": 3,
+                      "route_type": 0,
+                      "route_data": [
+                        "47.6138608,-122.2069818",
+                        "47.613203,-122.2032269",
+                        "47.6115829,-122.204289",
+                        "47.6119951,-122.1982487",
+                        "47.6138539,-122.2015532",
+                        "47.6173952,-122.2050833",
+                        "47.6112357,-122.2067888",
+                        "47.6119951,-122.2056838"
+                      ]
+                    },
+                    {
+                      "route_id": 4,
+                      "route_type": 0,
+                      "route_data": [
+                        "47.635917, -122.370470",
+                        "47.635929, -122.365039",
+                        "47.632292, -122.367689"
+                      ]
+                    }
+                  ]
+                }
+    Route.truncate_table()
+    for r in mockRoutes['routes']:
+        Route.create(route_id = r['route_id'],
+                    route_type = r['route_type'],
+                    route_data = pickle.dumps(r['route_data']))
+        
+def insert_mock_minions():
+    from .models import Minion
+    mockMinions = {"minions":[
+        ["tigerspy4092", "lamepass"],
+        ["tigerspy1034", "lamepass"],
+        ["tigerspy1853", "lamepass"],
+        ["tigerspy2049", "lamerpass"]]}
+    Minion.truncate_table()
+    i=0
+    for m in mockMinions['minions']:
+        Minion.create(user_id = i,
+                    user_name = m[0],
+                    user_password = m[1],
+                    user_type = 0)
+        i=i+1
+        
 def insert_mock_data():
-    num_pokemon = 6
+    num_pokemon = 12
     num_pokestop = 6
     num_gym = 6
 
@@ -127,8 +196,7 @@ def insert_mock_data():
     latitude, longitude = float(config['ORIGINAL_LATITUDE']),\
         float(config['ORIGINAL_LONGITUDE'])
 
-    locations = [l for l in generate_location_steps((latitude, longitude),
-                 num_pokemon)]
+    locations = [l for l in generate_location_steps((latitude, longitude))]
     disappear_time = datetime.now() + timedelta(hours=1)
 
     detect_time = datetime.now()

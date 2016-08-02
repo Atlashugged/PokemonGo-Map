@@ -131,6 +131,19 @@ def coordinates(location):
 def getElevation(coords):
     result = _fetch('elevation',{'locations':'{},{}'.format(coords[0],coords[1])})
     return (coords[0],coords[1],result['results'][0]['elevation'])
+
+'''
+def path(dirString, mode = 'walking', samplefreq=12,speed=3.1):
+    args = {'mode':mode}
+    #dirstring = "47.6138608,-122.2069818/47.613203,-122.2032269/47.6115829,-122.204289/47.6119951,-122.1982487/47.6138539,-122.2015532/47.6173952,-122.2050833/47.6112357,-122.2067888/47.6119951,-122.2056838/@47.6143225,-122.2070354,16z"
+    splitstring = splitDirectionString(dirString)
+    return path(splitstring,mode,samplefreq,speed)
+'''
+def splitDirectionString(dirString):
+    splitstring = dirString.split('/')
+    if any('@' in s for s in splitstring):
+        del splitstring[-1]
+    return splitstring
     
 def path(origin, destination = None, mode = 'walking', samplefreq=12,speed=3.1):
     '''

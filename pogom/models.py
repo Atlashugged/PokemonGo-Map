@@ -6,7 +6,7 @@ import os
 import time
 from peewee import Model, MySQLDatabase, SqliteDatabase, InsertQuery,\
                    IntegerField, CharField, DoubleField, BooleanField,\
-                   DateTimeField, OperationalError
+                   DateTimeField, OperationalError, BlobField
 from datetime import datetime, timedelta
 from base64 import b64encode
 
@@ -14,6 +14,8 @@ from . import config
 from .utils import get_pokemon_name, get_args, send_to_webhook
 from .transform import transform_from_wgs_to_gcj
 from .customLog import printPokemon
+from playhouse.sqlite_ext import PrimaryKeyAutoIncrementField
+from pip._vendor.html5lib.html5parser import method_decorator_metaclass
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +56,81 @@ class BaseModel(Model):
                         result['latitude'], result['longitude'])
         return results
 
+class Route(BaseModel):
+    route_id = IntegerField(primary_key=True)
+    route_type = IntegerField()
+    route_data = BlobField()
+    assigned_user = IntegerField(null=True)
+    active = BooleanField()
+    
+    @classmethod
+    def freeRoute(cls):
+        query = (Route
+                 .select()
+                 .where(active==false).dicts())
+        return query[0]
+    
+    @property
+    def waypoints(self):
+        return pickle.loads(route_data)
+    
+    @waypoints.setter
+    def waypoints(self,value):
+        self.route_data = pickle.dumps(value)
+    
+    @classmethod
+    def getRoutePoints():
+        return enumerate(generate_location_steps(waypoints))
+    
+    @classmethod
+    def getAllRoutes(cls):
+        query = (Route
+         .select()
+         .dicts())
+        routes = []
+        for r in query:
+            routes.append(r)
+        return routes
+    
+    def generate_location_steps(route):
+    time.sleep(1)
+    loc = maps.getElevation(maps.coordinates(route[0]))
+    for i in range(len(route)):
+        speed=11+random.choice([-3,-2,-1,0,1])
+        if (i==0):
+            #yield loc
+            continue
+        for s in maps.path(maps.coordinates('{},{}'.format(loc[0],loc[1])),maps.coordinates(route[i]),speed=speed):
+            loc = randomizeCoords((s[0],s[1],s[2]))
+            yield (loc)
+    
+    def randomizeCoords(coords):
+        lat = coords[0]
+        lon = coords[1]
+        z = coords[2]
+        lat = lat + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
+        lon = lon + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
+        return(lat,lon,z)
+
+class Minion(BaseModel):
+    user_id = IntegerField()
+    user_name = CharField()
+    user_password = CharField()
+    user_type = IntegerField()
+    latitude = DoubleField(null=True)
+    longitude = DoubleField(null=True)
+    elevation = DoubleField(null=True)
+    activeRoute = IntegerField(null=True)
+    
+    
+    
+    @classmethod
+    def freeMinion(cls):
+        query = (Minion
+                .select()
+                .where(Minion.activeRoute==None).dicts())
+        return query[0]
+        
 
 class Pokemon(BaseModel):
     # We are base64 encoding the ids delivered by the api
@@ -338,5 +415,5 @@ def bulk_upsert(cls, data):
 
 def create_tables(db):
     db.connect()
-    db.create_tables([Pokemon, Pokestop, Gym, ScannedLocation], safe=True)
+    db.create_tables([Pokemon, Pokestop, Gym, ScannedLocation,Route,Minion], safe=True)
     db.close()
