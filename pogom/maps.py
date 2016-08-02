@@ -128,8 +128,11 @@ def coordinates(location):
 
     return result['lat'], result['lng']
 
-
-def path(origin, destination = None, mode = 'walking'):
+def getElevation(coords):
+    result = _fetch('elevation',{'locations':'{},{}'.format(coords[0],coords[1])})
+    return (coords[0],coords[1],result['results'][0]['elevation'])
+    
+def path(origin, destination = None, mode = 'walking', samplefreq=12,speed=3.1):
     '''
     Find a not-so-long path from somewhere to somewhere else.
 
@@ -141,7 +144,6 @@ def path(origin, destination = None, mode = 'walking'):
 
     Returns a list of coordinates to follow, or None if it didn't work either.
     '''
-    print origin, destination
     args = {'mode': mode}
     if destination:
         origin, destination = '%f,%f' % origin, '%f,%f' % destination
@@ -154,7 +156,19 @@ def path(origin, destination = None, mode = 'walking'):
     #try:
     result = _fetch('directions', args)
     # You can extract other useful informations here, such as duration
+    
+    distance = 0
+    for leg in result['routes'][0]['legs']:
+        distance = distance + leg['distance']["value"]
+    distancepersample = samplefreq*speed
+    samples = distance/distancepersample
+    print '{}m at {} meters per sample. {} samples'.format(distance,distancepersample, samples)
     result = result['routes'][0]['overview_polyline']['points']
+    result = _fetch('elevation',{'path':'enc:{}'.format(result),'samples':long(samples)})
+    returnArray = []
+    for loc in result['results']:
+        returnArray.append((loc['location']['lat'],loc['location']['lng'],loc['elevation']))
     #except:
         #return None
-    return _decode(result)
+    print returnArray
+    return returnArray

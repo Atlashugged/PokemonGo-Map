@@ -20,6 +20,7 @@ import random
 import maps
 import json
 
+
 from threading import Thread, Lock
 from queue import Queue
 
@@ -81,24 +82,28 @@ def generate_location_steps(route):
     waydest = maps.coordinates(route[1])
     loopdest = maps.coordinates(route[2])
     
-    yield (homedest[0], homedest[1], 0)
-    
-    mpath = maps.path(homedest, waydest)
+    yield maps.getElevation(homedest)
+    speed=11+random.choice([-3,-2,-1,0,1,2])
+    mpath = maps.path(homedest, waydest, speed=speed)
     for s in mpath:
-        print (s[0],s[1],0)
-        yield (s[0],s[1],0)
+        yield (randomizeCoords((s[0],s[1],s[2])))
     
-    mpath = maps.path(waydest, loopdest)
+    mpath = maps.path(waydest, loopdest, speed=speed)
     for s in mpath:
-        print (s[0],s[1],0)
-        yield (s[0],s[1],0)
+        yield (randomizeCoords((s[0],s[1],s[2])))
         
-    mpath = maps.path(loopdest, homedest)
+    mpath = maps.path(loopdest, homedest, speed=speed)
     for s in mpath:
-        print (s[0],s[1],0)
-        yield (s[0],s[1],0)
+        yield (randomizeCoords((s[0],s[1],s[2])))
 
-
+def randomizeCoords(coords):
+    lat = coords[0]
+    lon = coords[1]
+    z = coords[2]
+    lat = lat + (random.uniform(0.00000001,0.0000013) * random.choice([-1,1]))
+    lon = lon + (random.uniform(0.00000001,0.0000013) * random.choice([-1,1]))
+    return(lat,lon,z)
+    
 def login(api, args, position, i=0):
     log.info('Attempting login to Pokemon Go.')
 
@@ -150,6 +155,7 @@ def search_thread(userid,args,q):
             failed_consecutive = 0
             while not response_dict:
                 response_dict = send_map_request(api, loc[1])
+                print '{}: location: {}'.format(args.pgousers[userid][0], loc[1])
                 if response_dict:
                     with lock:
                         try:
