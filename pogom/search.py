@@ -18,6 +18,7 @@ import math
 import threading
 import random
 import maps
+import json
 
 from threading import Thread, Lock
 from queue import Queue
@@ -31,7 +32,7 @@ from .models import parse_map
 log = logging.getLogger(__name__)
 
 TIMESTAMP = '\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000'
-api = PGoApi()
+
 
 search_queue = Queue()
 
@@ -74,72 +75,36 @@ def get_new_coords(init_loc, distance, bearing):
     print "wob: {}, wlb: {}".format(wobble_lat, wobble_lon)
     return [math.degrees(wobble_lat), math.degrees(wobble_lon)]
 
-def generate_location_steps(initial_loc, step_count):
-    #Bearing (degrees)
-    '''
-    NORTH = 0
-    EAST = 90
-    SOUTH = 180
-    WEST = 270
-
-    pulse_radius = 0.1                  # km - radius of players heartbeat is 100m
-    xdist = math.sqrt(3)*pulse_radius   # dist between column centers
-    ydist = 3*(pulse_radius/2)          # dist between row centers
-
-    yield (initial_loc[0], initial_loc[1], 0) #insert initial location
-
-    ring = 1            
-    loc = initial_loc
-    while ring < step_count:
-        #Set loc to start at top left
-        loc = get_new_coords(loc, ydist, NORTH)
-        loc = get_new_coords(loc, xdist/2, WEST)
-        for direction in range(6):
-            for i in range(ring):
-                if direction == 0: # RIGHT
-                    loc = get_new_coords(loc, xdist, EAST)
-                if direction == 1: # DOWN + RIGHT
-                    loc = get_new_coords(loc, ydist, SOUTH)
-                    loc = get_new_coords(loc, xdist/2, EAST)
-                if direction == 2: # DOWN + LEFT
-                    loc = get_new_coords(loc, ydist, SOUTH)
-                    loc = get_new_coords(loc, xdist/2, WEST)
-                if direction == 3: # LEFT
-                    loc = get_new_coords(loc, xdist, WEST)
-                if direction == 4: # UP + LEFT
-                    loc = get_new_coords(loc, ydist, NORTH)
-                    loc = get_new_coords(loc, xdist/2, WEST)
-                if direction == 5: # UP + RIGHT
-                    loc = get_new_coords(loc, ydist, NORTH)
-                    loc = get_new_coords(loc, xdist/2, EAST)
-                yield (loc[0], loc[1], 0)
-        ring += 1
-    '''
-    loopdest = maps.coordinates("Pioneer Square, Seattle, wa")
-    waydest = maps.coordinates("Belltown, Seattle, wa")
-    yield (initial_loc[0], initial_loc[1], 0)
-    mpath = maps.path((initial_loc[0], initial_loc[1]), loopdest)
+def generate_location_steps(route):
+    time.sleep(1)
+    homedest = maps.coordinates(route[0])
+    waydest = maps.coordinates(route[1])
+    loopdest = maps.coordinates(route[2])
+    
+    yield (homedest[0], homedest[1], 0)
+    
+    mpath = maps.path(homedest, waydest)
     for s in mpath:
         print (s[0],s[1],0)
         yield (s[0],s[1],0)
     
-    mpath = maps.path(loopdest, waydest)
+    mpath = maps.path(waydest, loopdest)
     for s in mpath:
         print (s[0],s[1],0)
         yield (s[0],s[1],0)
         
-    mpath = maps.path(waydest, (initial_loc[0], initial_loc[1]))
+    mpath = maps.path(loopdest, homedest)
     for s in mpath:
         print (s[0],s[1],0)
         yield (s[0],s[1],0)
 
 
-def login(args, position):
+def login(api, args, position, i=0):
     log.info('Attempting login to Pokemon Go.')
 
     api.set_position(*position)
-
-    while not api.login(args.auth_service, args.username, args.password):
+    print args.pgousers[i][0], args.pgousers[i][1]
+    while not api.login(args.auth_service, args.pgousers[i][0], args.pgousers[i][1]):
         log.info('Failed to login to Pokemon Go. Trying again in {:g} seconds.'.format(args.login_delay))
         time.sleep(args.login_delay)
 
@@ -149,57 +114,65 @@ def login(args, position):
 #
 # Search Threads Logic
 #
-def create_search_threads(num):
+def create_search_threads(args):
     search_threads = []
+    num=len(args.pgousers)
     for i in range(num):
-        t = Thread(target=search_thread, name='search_thread-{}'.format(i), args=(search_queue,))
+        t = Thread(target=search_thread, name='search_thread-{}'.format(i), args=(i,args,search_queue,))
         t.daemon = True
         t.start()
         search_threads.append(t)
 
 
-def search_thread(q):
+def search_thread(userid,args,q):
+    api = PGoApi()
+    step =1
     threadname = threading.currentThread().getName()
     log.debug("Search thread {}: started and waiting".format(threadname))
     while True:
 
         # Get the next item off the queue (this blocks till there is something)
-        i, step_location, step, lock = q.get()
-
-        # If a new location has been set, just mark done and continue
-        if 'NEXT_LOCATION' in config:
-            log.debug("{}: new location waiting, flushing queue".format(threadname))
-            q.task_done()
-            continue
-
-        log.debug("{}: processing itteration {} step {}".format(threadname, i, step))
-        response_dict = {}
-        failed_consecutive = 0
-        while not response_dict:
-            response_dict = send_map_request(api, step_location)
-            if response_dict:
-                with lock:
-                    try:
-                        parse_map(response_dict, i, step, step_location)
-                        log.debug("{}: itteration {} step {} complete".format(threadname, i, step))
-                    except KeyError:
-                        log.error('Search thread failed. Response dictionary key error')
-                        log.debug('{}: itteration {} step {} failed. Response dictionary\
-                            key error.'.format(threadname, i, step))
-                        failed_consecutive += 1
-                        if(failed_consecutive >= config['REQ_MAX_FAILED']):
-                            log.error('Niantic servers under heavy load. Waiting before trying again')
-                            time.sleep(config['REQ_HEAVY_SLEEP'])
-                            failed_consecutive = 0
-                        response_dict = {}
+        route, lock = q.get()
+        i=0
+        for loc in route:
+            i=i+1
+            if api._auth_provider and api._auth_provider._ticket_expire:
+                remaining_time = api._auth_provider._ticket_expire/1000 - time.time()
+        
+                if remaining_time > 60:
+                    log.info("Skipping Pokemon Go login process since already logged in \
+                        for another {:.2f} seconds".format(remaining_time))
+                else:
+                    login(api, args, loc[1], userid)
             else:
-                log.info('Map download failed, waiting and retrying')
-                log.debug('{}: itteration {} step {} failed'.format(threadname, i, step))
-                print "sleeping {}".format(config['REQ_SLEEP'])
-                time.sleep(config['REQ_SLEEP'])
-
-        print "sleeping {}".format(config['REQ_SLEEP'])
-        time.sleep(config['REQ_SLEEP'])
+                login(api, args, loc[1], userid)
+            response_dict = {}
+            failed_consecutive = 0
+            while not response_dict:
+                response_dict = send_map_request(api, loc[1])
+                if response_dict:
+                    with lock:
+                        try:
+                            parse_map(response_dict, i, step, loc[1])
+                            log.debug("{}: itteration {} step {} complete".format(threadname, i, step))
+                        except KeyError:
+                            log.error('Search thread failed. Response dictionary key error')
+                            log.debug('{}: itteration {} step {} failed. Response dictionary\
+                                key error.'.format(threadname, i, step))
+                            failed_consecutive += 1
+                            if(failed_consecutive >= config['REQ_MAX_FAILED']):
+                                log.error('Niantic servers under heavy load. Waiting before trying again')
+                                time.sleep(config['REQ_HEAVY_SLEEP'])
+                                failed_consecutive = 0
+                            response_dict = {}
+                else:
+                    log.info('Map download failed, waiting and retrying')
+                    log.debug('{}: itteration {} step {} failed'.format(threadname, i, step))
+                    print "sleeping {}".format(config['REQ_SLEEP'])
+                    time.sleep(config['REQ_SLEEP'])
+    
+            print "sleeping {}".format(config['REQ_SLEEP'])
+            time.sleep(config['REQ_SLEEP'])
         q.task_done()
 
 
@@ -211,7 +184,7 @@ def search_loop(args):
     while True:
         log.info("Search loop {} starting".format(i))
         try:
-            search(args, i)
+            search(args)
             log.info("Search loop {} complete.".format(i))
             i += 1
         except Exception as e:
@@ -225,36 +198,16 @@ def search_loop(args):
 #
 # Overseer main logic
 #
-def search(args, i):
-    num_steps = args.step_limit
-
-    # Update the location if needed
-    if 'NEXT_LOCATION' in config:
-        log.info('New location set')
-        config['ORIGINAL_LATITUDE'] = config['NEXT_LOCATION']['lat']
-        config['ORIGINAL_LONGITUDE'] = config['NEXT_LOCATION']['lon']
-        config.pop('NEXT_LOCATION', None)
+def search(args):
 
     position = (config['ORIGINAL_LATITUDE'], config['ORIGINAL_LONGITUDE'], 0)
 
-    if api._auth_provider and api._auth_provider._ticket_expire:
-        remaining_time = api._auth_provider._ticket_expire/1000 - time.time()
-
-        if remaining_time > 60:
-            log.info("Skipping Pokemon Go login process since already logged in \
-                for another {:.2f} seconds".format(remaining_time))
-        else:
-            login(args, position)
-    else:
-        login(args, position)
-
     lock = Lock()
-
-    for step, step_location in enumerate(generate_location_steps(position, num_steps), 1):
-        log.info("Path test {}".format(step_location))
-        log.debug("Queue search itteration {}, step {}".format(i, step))
-        search_args = (i, step_location, step, lock)
-        search_queue.put(search_args)
+    with lock:
+        for r in args.routes:
+            waypoints = enumerate(generate_location_steps(r))
+            search_args = (waypoints, lock)
+            search_queue.put(search_args)
 
     # Wait until this scan itteration queue is empty (not nessearily done)
     while not search_queue.empty():

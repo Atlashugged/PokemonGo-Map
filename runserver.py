@@ -5,6 +5,7 @@ import os
 import sys
 import logging
 import time
+import json
 
 from threading import Thread
 from flask_cors import CORS
@@ -14,6 +15,7 @@ from pogom.app import Pogom
 from pogom.utils import get_args, insert_mock_data
 from pogom.search import search_loop, create_search_threads, fake_search_loop
 from pogom.models import init_database, create_tables, Pokemon, Pokestop, Gym
+from pogom import maps
 
 from pogom.pgoapi.utilities import get_pos_by_name
 
@@ -70,8 +72,14 @@ if __name__ == '__main__':
     if not args.only_server:
         # Gather the pokemons!
         if not args.mock:
+            route_data = json.loads(open("routes.json").read())
+            routes = route_data['routes']
+            pgousers = route_data['users']
+            args.routes = routes
+            args.pgousers = pgousers
+            args.num_threads = len(pgousers)
             log.debug('Starting a real search thread and {} search runner thread(s)'.format(args.num_threads))
-            create_search_threads(args.num_threads)
+            create_search_threads(args)
             search_thread = Thread(target=search_loop, args=(args,))
         else:
             log.debug('Starting a fake search thread')

@@ -1,4 +1,5 @@
-# coding=utf-8
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 '''
 MAPS -- Version 1, for Python 3
 
@@ -76,18 +77,14 @@ Oh, and DO WHAT THE FUCK YOU WANT WITH THIS.
 '''
 from urllib import urlencode
 from requests import get
+from . import config
 
-
-
-# Replace with your API key here!
-#from . import config
-KEY = "AIzaSyCdsNNCkw0WiOhriFVGqjiSJDcb5p3YSW4"
 
 
 
 def _fetch(api, args):
     base_url = 'https://maps.googleapis.com/maps/api/%s/json?key=%s&'
-    return get(base_url % (api, KEY) + urlencode(args)).json()
+    return get(base_url % (api, config['GMAPS_KEY']) + urlencode(args)).json()
 
 def _decode(polyline):
     values, current = [], []

@@ -1,3 +1,8 @@
 eclipse.preferences.version=1
+encoding//pogom/__init__.py=utf-8
+encoding//pogom/app.py=utf-8
 encoding//pogom/maps.py=utf-8
+encoding//pogom/models.py=utf-8
 encoding//pogom/search.py=utf-8
+encoding//pogom/utils.py=utf-8
+encoding/runserver.py=utf-8

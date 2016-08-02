@@ -1,0 +1,12 @@
+{
+    "routes": [
+        ["Pioneer Square, Seattle, wa", "Olympic Sculpture Park, Seattle, wa", "The 5th Avenue Theatre, Seattle, WA"],
+        ["47.656541,-122.3573115", "47.665176, -122.354277", "47.653479, -122.349998"],
+        ["Cyclops, 2421 1st Avenue, Seattle, WA 98121", "Lake Union Park, Seattle, wa", "Lunchbox Laboratory, Seattle, WA"]
+    ],
+    "users": [
+        ["tigerspy4092", "lamepass"],
+        ["tigerspy1034", "lamepass"],
+        ["tigerspy1853", "lamepass"]
+    ]
+}
