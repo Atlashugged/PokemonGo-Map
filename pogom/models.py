@@ -4,6 +4,8 @@
 import logging
 import os
 import time
+import maps
+
 from peewee import Model, MySQLDatabase, SqliteDatabase, InsertQuery,\
                    IntegerField, CharField, DoubleField, BooleanField,\
                    DateTimeField, OperationalError, BlobField
@@ -41,6 +43,25 @@ def init_database():
 
     return db
 
+def generate_location_steps(route):
+    time.sleep(1)
+    loc = maps.getElevation(maps.coordinates(route[0]))
+    for i in range(len(route)):
+        speed=11+random.choice([-3,-2,-1,0,1])
+        if (i==0):
+            #yield loc
+            continue
+        for s in maps.path(maps.coordinates('{},{}'.format(loc[0],loc[1])),maps.coordinates(route[i]),speed=speed):
+            loc = randomizeCoords((s[0],s[1],s[2]))
+            yield (loc)
+
+def randomizeCoords(coords):
+    lat = coords[0]
+    lon = coords[1]
+    z = coords[2]
+    lat = lat + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
+    lon = lon + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
+    return(lat,lon,z)
 
 class BaseModel(Model):
     class Meta:
@@ -61,7 +82,7 @@ class Route(BaseModel):
     route_type = IntegerField()
     route_data = BlobField()
     assigned_user = IntegerField(null=True)
-    active = BooleanField()
+    active = BooleanField(default=False)
     
     @classmethod
     def freeRoute(cls):
@@ -79,38 +100,21 @@ class Route(BaseModel):
         self.route_data = pickle.dumps(value)
     
     @classmethod
-    def getRoutePoints():
-        return enumerate(generate_location_steps(waypoints))
+    def getRoutePoints(cls):
+        points = []
+        for w in enumerate(generate_location_steps(cls.waypoints)):
+            points.append(w)
+        return points
     
     @classmethod
     def getAllRoutes(cls):
-        query = (Route
-         .select()
-         .dicts())
+        query = (Route.select())
         routes = []
         for r in query:
             routes.append(r)
         return routes
     
-    def generate_location_steps(route):
-    time.sleep(1)
-    loc = maps.getElevation(maps.coordinates(route[0]))
-    for i in range(len(route)):
-        speed=11+random.choice([-3,-2,-1,0,1])
-        if (i==0):
-            #yield loc
-            continue
-        for s in maps.path(maps.coordinates('{},{}'.format(loc[0],loc[1])),maps.coordinates(route[i]),speed=speed):
-            loc = randomizeCoords((s[0],s[1],s[2]))
-            yield (loc)
-    
-    def randomizeCoords(coords):
-        lat = coords[0]
-        lon = coords[1]
-        z = coords[2]
-        lat = lat + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
-        lon = lon + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
-        return(lat,lon,z)
+
 
 class Minion(BaseModel):
     user_id = IntegerField()
@@ -121,15 +125,12 @@ class Minion(BaseModel):
     longitude = DoubleField(null=True)
     elevation = DoubleField(null=True)
     activeRoute = IntegerField(null=True)
-    
-    
-    
+
     @classmethod
     def freeMinion(cls):
-        query = (Minion
-                .select()
-                .where(Minion.activeRoute==None).dicts())
-        return query[0]
+        query = (Minion.select().where(Minion.activeRoute==None).limit(1))
+        for m in query:
+            return m
         
 
 class Pokemon(BaseModel):

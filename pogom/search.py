@@ -58,25 +58,7 @@ def send_map_request(api, position):
         log.warning("Uncaught exception when downloading map " + str(e))
         return False
 
-def generate_location_steps(route):
-    time.sleep(1)
-    loc = maps.getElevation(maps.coordinates(route[0]))
-    for i in range(len(route)):
-        speed=11+random.choice([-3,-2,-1,0,1])
-        if (i==0):
-            #yield loc
-            continue
-        for s in maps.path(maps.coordinates('{},{}'.format(loc[0],loc[1])),maps.coordinates(route[i]),speed=speed):
-            loc = randomizeCoords((s[0],s[1],s[2]))
-            yield (loc)
-    
-def randomizeCoords(coords):
-    lat = coords[0]
-    lon = coords[1]
-    z = coords[2]
-    lat = lat + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
-    lon = lon + (random.uniform(0.00000001,0.0000016) * random.choice([-1,1]))
-    return(lat,lon,z)
+
     
 def login(api, args, position, i=0):
     log.info('Attempting login to Pokemon Go.')
@@ -111,8 +93,9 @@ def search_thread(userid,args,q):
     while True:
         # Get the next item off the queue (this blocks till there is something)
         m, r, lock = q.get()
+        waypoints = r.getRoutePoints()
         i=0
-        for location in route:
+        for location in waypoints:
             i=i+1
             with lock:
                 if api._auth_provider and api._auth_provider._ticket_expire:
@@ -183,7 +166,7 @@ def search(args):
     lock = threading.RLock()
     with lock:
         m = Minion.freeMinion()
-        r = Route.getAllRoutes()
+        routes = Route.getAllRoutes()
         for r in routes:
             #waypoints = enumerate(generate_location_steps(pickle.loads(r['route_data'])))
             search_args = (m, r, lock)
